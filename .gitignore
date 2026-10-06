@@ -1,0 +1,27 @@
+# ---- 依赖 ----
+node_modules/
+
+# ---- 构建产物（exe / runtime / tar）----
+dist/
+
+# ---- 工具缓存与本地状态 ----
+.codegraph/
+.omo/
+
+# ---- 编辑器 / IDE ----
+.idea/
+.vscode/
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---- 日志 ----
+*.log
+
+# ---- 超过 GitHub 100 MB 单文件限制的模型 ----
+# detector_Q 已分卷为 detector_Q.z01~z05 + detector_Q.zip（每卷 <100 MB，随仓库入库），
+# 原始的 158 MB detector_Q.onnx 不入库，克隆后用分卷还原即可。
+model/detector_Q.onnx
+

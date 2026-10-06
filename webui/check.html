@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>media-watermark 检测水印</title>
+<style>
+:root { color-scheme: dark; --bg:#14161a; --panel:#1c1f24; --line:#2a2e35; --text:#e6e8eb; --muted:#a9b0ba; --accent:#7cc4ff; --ok:#7ee2a8; --err:#ff8f8f; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; font:14px/1.5 system-ui,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; }
+header { padding:12px 20px; border-bottom:1px solid var(--line); font-weight:600; }
+header small { color:var(--muted); font-weight:400; margin-left:8px; }
+header .nav { float:right; color:var(--accent); text-decoration:none; font-weight:500; }
+header .nav:hover { text-decoration:underline; }
+.toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field label { font-size:12px; color:var(--muted); }
+input { padding:7px 10px; font:inherit; color:inherit; background:#0f1114; border:1px solid #2f343c; border-radius:6px; }
+input:focus { outline:1px solid var(--accent); }
+button { padding:8px 16px; font:inherit; color:#0b0d10; background:var(--accent); border:0; border-radius:6px; cursor:pointer; }
+button.ghost { background:#2a3038; color:var(--text); }
+button:disabled { opacity:.5; cursor:default; }
+main { flex:1; display:flex; min-height:0; }
+.view { flex:1; min-width:0; padding:16px 20px; display:flex; flex-direction:column; gap:10px; overflow:auto; align-items:center; }
+.canvas-wrap { position:relative; display:inline-block; line-height:0; max-width:100%; }
+.canvas-wrap img { display:block; max-width:100%; max-height:68vh; user-select:none; -webkit-user-drag:none; }
+.overlay { position:absolute; inset:0; pointer-events:none; }
+.detected { position:absolute; border:2px solid var(--ok); background:rgba(126,226,168,.18); }
+.detected span { position:absolute; top:-10px; left:-10px; min-width:20px; height:20px; border-radius:10px; background:var(--ok); color:#08121c; font:600 12px/20px system-ui; text-align:center; }
+.panel { width:350px; flex:none; border-left:1px solid var(--line); background:var(--panel); padding:16px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.panel h3 { margin:0; font-size:14px; }
+.result-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.result-list:empty::after { content:"还没有检测结果"; color:var(--muted); font-size:12px; }
+.result-list li { display:flex; align-items:center; gap:8px; padding:8px 10px; background:#0f1114; border:1px solid #2f343c; border-radius:6px; font-size:13px; }
+.result-list li .idx { width:22px; height:22px; border-radius:11px; background:var(--ok); color:#08121c; font-weight:600; text-align:center; line-height:22px; flex:none; }
+.result-list li .info { flex:1; font-variant-numeric:tabular-nums; }
+.result-list li .info b { color:var(--accent); word-break:break-all; }
+.result-list li .info .mode { color:var(--muted); font-size:12px; }
+.status { min-height:20px; font-size:13px; color:var(--muted); white-space:pre-wrap; word-break:break-all; }
+.status.ok { color:var(--ok); }
+.status.err { color:var(--err); }
+.hint { font-size:12px; color:var(--muted); }
+.input-row { display:flex; gap:6px; }
+.input-row input { flex:1; min-width:0; }
+.help { flex:none; width:32px; padding:0; background:#2a3038; color:var(--muted); border:1px solid #2f343c; border-radius:6px; font-weight:700; cursor:pointer; }
+.help:hover { color:var(--text); border-color:var(--accent); }
+.modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center; padding:20px; }
+.modal.on { display:flex; }
+.modal-box { max-width:580px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px; line-height:1.75; }
+.modal-box h3 { margin:0 0 12px; }
+.modal-box p { margin:0 0 10px; }
+.modal-box code { background:#0f1114; padding:1px 5px; border-radius:4px; color:var(--accent); }
+.modal-note { color:var(--muted); font-size:12px; }
+.modal-box button { margin-top:6px; }
+</style>
+</head>
+<body>
+<header>media-watermark 检测水印 <small>盲定位：无需知道水印的位置/大小</small><a class="nav" href="/add.html" target="_blank">添加页 ↗</a></header>
+
+<div class="toolbar">
+  <div class="field" style="flex:1;min-width:260px"><label>图片路径（服务端）</label><div class="input-row"><input id="imagePath" placeholder="相对或绝对路径，如 a.png 或 D:\图片\a.png"><button class="help" data-help title="路径说明">?</button></div></div>
+  <button id="detectBtn">检测水印</button>
+  <button id="loadBtn" class="ghost">加载图片</button>
+</div>
+
+<main>
+  <section class="view">
+    <div class="canvas-wrap">
+      <img id="baseImage" alt="">
+      <div class="overlay" id="overlay"></div>
+    </div>
+    <div class="hint" id="dims">未加载图片</div>
+  </section>
+  <aside class="panel">
+    <h3>检测结果</h3>
+    <ul class="result-list" id="resultList"></ul>
+    <div class="status" id="status"></div>
+  </aside>
+</main>
+
+<div class="modal" id="helpModal">
+    <div class="modal-box">
+        <h3>关于路径</h3>
+        <p>支持 <b>绝对路径</b> 和 <b>相对路径</b> 两种写法。</p>
+        <p><b>绝对路径</b>：从盘符 / 根目录开始的完整路径。<br>例如：<code>D:\图片\a.png</code>、<code>/home/user/a.png</code></p>
+        <p><b>相对路径</b>：相对于「<b>程序所在目录</b>」解析——<br>
+            · 分发包：<code>media-watermark.exe</code> 所在的文件夹<br>
+            · 开发模式（bun）：项目根目录<br>
+            例如：<code>a.png</code> 表示程序目录下的 a.png；<code>model/encoder_Q.onnx</code> 表示程序目录下 model 子目录里的文件。</p>
+        <p class="modal-note">路径由服务端读取，所以填的是服务器（本机）上的路径，不是浏览器所在电脑的文件选择。</p>
+        <button id="helpClose">知道了</button>
+    </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const state = {imageWidth: 0, imageHeight: 0, imagePath: '', detected: []}
+
+const setStatus = (message, type = '') => {
+    const el = $('status')
+    el.textContent = message
+    el.className = `status ${type}`
+}
+const postJson = async (url, body) => {
+    const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+    return data
+}
+const loadImage = (path) => new Promise((resolve, reject) => {
+    const img = $('baseImage')
+    img.onload = () => {
+        state.imageWidth = img.naturalWidth
+        state.imageHeight = img.naturalHeight
+        state.imagePath = path
+        $('dims').textContent = `图片尺寸：${img.naturalWidth} × ${img.naturalHeight} 像素`
+        renderOverlay()
+        resolve()
+    }
+    img.onerror = () => reject(new Error('图片加载失败（检查路径）'))
+    img.src = `/api/image?path=${encodeURIComponent(path)}&t=${Date.now()}`
+})
+const renderOverlay = () => {
+    const img = $('baseImage')
+    const overlay = $('overlay')
+    if (!img.naturalWidth) {
+        overlay.innerHTML = ''
+        return
+    }
+    const scale = img.getBoundingClientRect().width / img.naturalWidth
+    overlay.innerHTML = state.detected.map((region, index) => `
+        <div class="detected" style="left:${region.x * scale}px;top:${region.y * scale}px;width:${region.w * scale}px;height:${region.h * scale}px"><span>${index + 1}</span></div>`).join('')
+}
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]))
+const renderList = () => {
+    $('resultList').innerHTML = state.detected.map((region, index) => `
+        <li>
+            <span class="idx">${index + 1}</span>
+            <span class="info">(${region.x}, ${region.y}) · ${region.w}×${region.h}<br>
+                <b>${escapeHtml(region.content)}</b> <span class="mode">[${region.mode}]</span>
+            </span>
+        </li>`).join('')
+}
+const detect = async () => {
+    const path = $('imagePath').value.trim()
+    if (!path) {
+        setStatus('请填写图片路径', 'err')
+        return
+    }
+    $('detectBtn').disabled = true
+    setStatus('检测中…（首次运行会加载检测器，较慢）')
+    try {
+        if (state.imagePath !== path) await loadImage(path)
+        const results = await postJson('/api/check', {outputFile: path})
+        state.detected = results.map((item) => {
+            const [first, second] = item.position
+            return {
+                x: Math.min(first.x, second.x),
+                y: Math.min(first.y, second.y),
+                w: Math.abs(second.x - first.x),
+                h: Math.abs(second.y - first.y),
+                content: item.content,
+                mode: item.mode
+            }
+        })
+        renderOverlay()
+        renderList()
+        setStatus(results.length ? `✓ 检测到 ${results.length} 处水印` : '未检测到水印', results.length ? 'ok' : 'err')
+    } catch (error) {
+        setStatus(`✗ ${error.message}`, 'err')
+    } finally {
+        $('detectBtn').disabled = false
+    }
+}
+const loadOnly = async () => {
+    const path = $('imagePath').value.trim()
+    if (!path) {
+        setStatus('请填写图片路径', 'err')
+        return
+    }
+    try {
+        state.detected = []
+        await loadImage(path)
+        renderList()
+        setStatus('图片已加载', 'ok')
+    } catch (error) {
+        setStatus(`✗ ${error.message}`, 'err')
+    }
+}
+window.addEventListener('resize', renderOverlay)
+$('detectBtn').onclick = detect
+$('loadBtn').onclick = loadOnly
+// 路径说明弹窗
+for (const button of document.querySelectorAll('[data-help]')) {
+    button.onclick = () => $('helpModal').classList.add('on')
+}
+$('helpClose').onclick = () => $('helpModal').classList.remove('on')
+$('helpModal').onclick = (event) => {
+    if (event.target === $('helpModal')) $('helpModal').classList.remove('on')
+}
+</script>
+</body>
+</html>

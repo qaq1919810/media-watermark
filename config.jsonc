@@ -1,0 +1,30 @@
+{
+    // 编码器模型文件：相对路径按"程序所在目录"解析，也可用绝对路径
+    "modelFile": "model/encoder_Q.onnx",
+    // 解码器模型文件（read 子命令使用）：相对路径按"程序所在目录"解析
+    "decoderFile": "model/decoder_Q.onnx",
+    // 检测器模型文件（scan 子命令使用，用于盲定位水印区域）：相对路径按"程序所在目录"解析
+    "detectorFile": "model/detector_Q.onnx",
+    // scan 的置信度阈值：低于此值的候选框丢弃（0~1，默认 0.5）
+    "detectThreshold": 0.5,
+    // 水印强度：默认 0.8。官方推荐范围 0.7~1.5
+    //   0.7~0.8 = 低噪声场景仍可可靠识别，画质更好（本工具默认 0.8）
+    //   1.0     = 官方默认强度
+    //   1.5     = 可抗打印等高强度场景
+    //   超出 0.7~1.5 会打印提示但继续执行
+    "wmStrength": 0.8,
+    // 运行模式（数组）：按顺序优先；不可用的由 onnxruntime 自动跳过并下退（实测：缺 CUDA/不存在的 EP 均自动移除 + 回落）
+    //   "dml" = DirectML 硬件加速（GPU；首次使用需编译算子缓存较慢，之后很快；多图/批量场景更快）
+    //   "cpu" = 纯 CPU
+    "modelMode": ["dml", "cpu"],
+    // 推理线程数："full" 用满（交给 onnxruntime 默认）；数字须为正整数且不超过本机逻辑核心数（超出直接报错）
+    "threads": "full",
+    // Web 服务端口（web 子命令；可被 --webPort 覆盖）
+    "webPort": 6969,
+    // 输出图片路径（add 子命令；可被 -o 覆盖）
+    "outputPath": "",
+    // 输入图片路径（可被 -i 覆盖）
+    "inputPath": "",
+    // 水印内容（add 子命令；UTF-8 编码后最多 8 字节，可被 -w 覆盖）
+    "watermarkContent": ""
+}

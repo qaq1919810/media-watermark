@@ -1,0 +1,29 @@
+{
+  "name": "media-watermark",
+  "module": "src/index.mjs",
+  "type": "module",
+  "private": true,
+  "imports": {
+    "#cli": "./src/features/cli/index.mjs",
+    "#cli/add": "./src/features/cli/add/index.mjs",
+    "#cli/check": "./src/features/cli/check/index.mjs",
+    "#config": "./src/utils/config.mjs",
+    "#watermark": "./src/utils/watermark.mjs",
+    "#web": "./src/features/web/index.mjs",
+    "#utils/*": "./src/utils/*"
+  },
+  "scripts": {
+    "dev": "bun src/index.mjs",
+    "setup:runtime": "bun scripts/setup-runtime.mjs",
+    "build": "bun scripts/build.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.13.13",
+    "onnxruntime-node": "^1.30.0",
+    "sharp": "^0.35.5",
+    "tar-stream": "^3.2.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

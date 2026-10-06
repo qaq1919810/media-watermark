@@ -1,0 +1,5 @@
+# 1. model 目录及其子目录下所有文件均作为二进制处理，且跳过差异压缩
+model/** binary -delta
+
+# 2. 单独把 LICENSE 恢复为普通文本（恢复换行符规范化与差异比对）
+model/LICENSE text delta

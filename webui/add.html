@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>media-watermark 添加水印</title>
+<style>
+:root { color-scheme: dark; --bg:#14161a; --panel:#1c1f24; --line:#2a2e35; --text:#e6e8eb; --muted:#a9b0ba; --accent:#7cc4ff; --ok:#7ee2a8; --err:#ff8f8f; }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; font:14px/1.5 system-ui,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column; }
+header { padding:12px 20px; border-bottom:1px solid var(--line); font-weight:600; }
+header small { color:var(--muted); font-weight:400; margin-left:8px; }
+header .nav { float:right; color:var(--accent); text-decoration:none; font-weight:500; }
+header .nav:hover { text-decoration:underline; }
+.toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field label { font-size:12px; color:var(--muted); }
+input { padding:7px 10px; font:inherit; color:inherit; background:#0f1114; border:1px solid #2f343c; border-radius:6px; }
+input:focus, select:focus { outline:1px solid var(--accent); }
+select { padding:7px 10px; font:inherit; color:inherit; background:#0f1114; border:1px solid #2f343c; border-radius:6px; }
+.capacity { padding:7px 0; font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.capacity.ok { color:var(--ok); }
+.capacity.err { color:var(--err); }
+.fine { display:none; flex-direction:column; gap:6px; padding:10px; background:#0f1114; border:1px solid #2f343c; border-radius:6px; }
+.fine.on { display:flex; }
+.fine-title { font-size:12px; color:var(--muted); }
+.fine-row { display:flex; align-items:center; gap:8px; }
+.fine-row > span { width:36px; color:var(--muted); font-size:12px; flex:none; }
+.fine-row label { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); flex:1; }
+.fine-row input { width:100%; padding:5px 8px; }
+.input-row { display:flex; gap:6px; }
+.input-row input { flex:1; min-width:0; }
+.help { flex:none; width:32px; padding:0; background:#2a3038; color:var(--muted); border:1px solid #2f343c; border-radius:6px; font-weight:700; cursor:pointer; }
+.help:hover { color:var(--text); border-color:var(--accent); }
+.modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center; padding:20px; }
+.modal.on { display:flex; }
+.modal-box { max-width:580px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px; line-height:1.75; }
+.modal-box h3 { margin:0 0 12px; }
+.modal-box p { margin:0 0 10px; }
+.modal-box code { background:#0f1114; padding:1px 5px; border-radius:4px; color:var(--accent); }
+.modal-note { color:var(--muted); font-size:12px; }
+.modal-box button { margin-top:6px; }
+button { padding:8px 16px; font:inherit; color:#0b0d10; background:var(--accent); border:0; border-radius:6px; cursor:pointer; }
+button.ghost { background:#2a3038; color:var(--text); }
+button:disabled { opacity:.5; cursor:default; }
+main { flex:1; display:flex; min-height:0; }
+.editor { flex:1; min-width:0; padding:16px 20px; display:flex; flex-direction:column; gap:10px; overflow:auto; align-items:center; }
+.canvas-wrap { position:relative; display:inline-block; line-height:0; max-width:100%; }
+.canvas-wrap img { display:block; max-width:100%; max-height:62vh; user-select:none; -webkit-user-drag:none; }
+.overlay { position:absolute; inset:0; cursor:crosshair; touch-action:none; }
+.region { position:absolute; border:2px solid var(--accent); background:rgba(124,196,255,.20); cursor:move; }
+.region.dim { opacity:.45; }
+.region.invalid { border-color:var(--err); background:rgba(255,120,120,.20); }
+.region .badge { position:absolute; top:-10px; left:-10px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:var(--accent); color:#08121c; font:600 12px/20px system-ui; text-align:center; }
+.region .handle { position:absolute; width:12px; height:12px; background:#0f1114; border:2px solid var(--accent); border-radius:2px; }
+.region .handle.nw { left:-7px; top:-7px; cursor:nwse-resize; }
+.region .handle.ne { right:-7px; top:-7px; cursor:nesw-resize; }
+.region .handle.sw { left:-7px; bottom:-7px; cursor:nesw-resize; }
+.region .handle.se { right:-7px; bottom:-7px; cursor:nwse-resize; }
+.panel { width:350px; flex:none; border-left:1px solid var(--line); background:var(--panel); padding:16px; display:flex; flex-direction:column; gap:12px; overflow:auto; }
+.panel h3 { margin:0; font-size:14px; }
+.region-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.region-list:empty::after { content:"还没有水印区域：拖拽画方块，或点「+ 新增水印」"; color:var(--muted); font-size:12px; }
+.region-list li { display:flex; align-items:center; gap:8px; padding:8px 10px; background:#0f1114; border:1px solid #2f343c; border-radius:6px; cursor:pointer; font-size:13px; }
+.region-list li.active { border-color:var(--accent); }
+.region-list li .idx { width:22px; height:22px; border-radius:11px; background:var(--accent); color:#08121c; font-weight:600; text-align:center; line-height:22px; flex:none; }
+.region-list li .info { flex:1; font-variant-numeric:tabular-nums; }
+.region-list li .del { background:none; border:0; color:#ffb3b3; cursor:pointer; font-size:15px; padding:2px 6px; }
+.status { min-height:20px; font-size:13px; color:var(--muted); white-space:pre-wrap; word-break:break-all; }
+.status.ok { color:var(--ok); }
+.status.err { color:var(--err); }
+.preview-wrap { position:relative; display:inline-block; line-height:0; max-width:100%; min-height:40px; }
+.preview-wrap img { display:block; max-width:100%; max-height:200px; }
+.hint { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>media-watermark 添加水印 <small>拖拽画矩形 · 点选后拖动/缩放 · 长宽比≤2:1、短边≥150、互不重叠</small><a class="nav" href="/check.html" target="_blank">检测页 ↗</a></header>
+
+<div class="toolbar">
+  <div class="field" style="flex:1;min-width:220px"><label>图片路径（服务端）</label><div class="input-row"><input id="imagePath" placeholder="相对或绝对路径，如 a.png 或 D:\图片\a.png"><button class="help" data-help title="路径说明">?</button></div></div>
+  <button id="loadBtn" class="ghost">加载图片</button>
+  <div class="field"><label>模式</label><select id="mode"><option value="utf8">UTF-8</option><option value="ascii">ASCII</option><option value="bits">位</option></select></div>
+  <div class="field"><label>水印内容</label><input id="content" value="hello" style="width:170px"></div>
+  <div class="field"><label>容量</label><span id="capacity" class="capacity">—</span></div>
+  <div class="field" style="flex:1;min-width:220px"><label>输出路径（服务端）</label><div class="input-row"><input id="outputPath" value="web-out.png"><button class="help" data-help title="路径说明">?</button></div></div>
+  <button id="addBtn">添加水印</button>
+</div>
+
+<main>
+  <section class="editor">
+    <div class="canvas-wrap">
+      <img id="baseImage" alt="">
+      <div class="overlay" id="overlay"></div>
+    </div>
+    <div class="hint" id="dims">未加载图片</div>
+  </section>
+  <aside class="panel">
+    <h3>水印区域</h3>
+    <button id="newBtn" class="ghost">+ 新增水印</button>
+    <ul class="region-list" id="regionList"></ul>
+    <div class="fine" id="fineTune">
+        <div class="fine-title">微调（选中区域 · 可键入，或鼠标悬停滚轮调整）</div>
+        <div class="fine-row"><span>左上</span><label>X<input type="number" id="tlx"></label><label>Y<input type="number" id="tly"></label></div>
+        <div class="fine-row"><span>右下</span><label>X<input type="number" id="brx"></label><label>Y<input type="number" id="bry"></label></div>
+    </div>
+    <h3>结果预览</h3>
+    <div class="preview-wrap">
+      <img id="resultImage" alt="">
+    </div>
+    <div class="status" id="status"></div>
+  </aside>
+</main>
+
+<div class="modal" id="helpModal">
+    <div class="modal-box">
+        <h3>关于路径</h3>
+        <p>支持 <b>绝对路径</b> 和 <b>相对路径</b> 两种写法，输入路径与输出路径都适用。</p>
+        <p><b>绝对路径</b>：从盘符 / 根目录开始的完整路径。<br>例如：<code>D:\图片\a.png</code>、<code>/home/user/a.png</code></p>
+        <p><b>相对路径</b>：相对于「<b>程序所在目录</b>」解析——<br>
+            · 分发包：<code>media-watermark.exe</code> 所在的文件夹<br>
+            · 开发模式（bun）：项目根目录<br>
+            例如：<code>a.png</code> 表示程序目录下的 a.png；<code>model/encoder_Q.onnx</code> 表示程序目录下 model 子目录里的文件。</p>
+        <p class="modal-note">路径由服务端读取/写入，所以填的是服务器（本机）上的路径，不是浏览器所在电脑的文件选择。</p>
+        <button id="helpClose">知道了</button>
+    </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi)
+const MIN_SIDE = 150
+const DEFAULT_SIDE = 300
+
+const state = {
+    imageWidth: 0,
+    imageHeight: 0,
+    regions: [],      // {id, x, y, size}，均为原图像素坐标
+    nextId: 1,
+    selectedId: null,
+    outputPath: ''
+}
+let drag = null
+
+// ---------------- 基础工具 ----------------
+const setStatus = (message, type = '') => {
+    const el = $('status')
+    el.textContent = message
+    el.className = `status ${type}`
+}
+
+// 三种内容模式：ascii(每字符 7 位) / utf8(每字节 8 位) / bits(原始位)
+const MODES = {
+    ascii: {bits: 7, capacity: 63, max: 9, unit: '字符'},
+    utf8: {bits: 8, capacity: 64, max: 8, unit: '字节'},
+    bits: {bits: 1, capacity: 63, max: 63, unit: '位'}
+}
+// 计算当前内容的占用情况，并刷新「容量」提示；合法返回 true。
+const measure = () => {
+    const mode = $('mode').value
+    const content = $('content').value
+    const info = MODES[mode]
+    let used = 0
+    let note = ''
+    if (mode === 'bits') {
+        const clean = content.replace(/\s+/g, '')
+        used = clean.length
+        if (!/^[01]*$/.test(clean)) note = '只能输入 0 和 1'
+        else if (used === 0) note = '不能为空'
+        else if (used > info.capacity) note = `最多 ${info.capacity} 位`
+    } else if (mode === 'ascii') {
+        const chars = [...content]
+        used = chars.length * info.bits
+        if (chars.length === 0) note = '不能为空'
+        else if (chars.some((char) => char.codePointAt(0) > 127)) note = '只支持 ASCII 字符（0-127）'
+        else if (chars.length > info.max) note = `最多 ${info.max} 字符`
+    } else {
+        used = new TextEncoder().encode(content).length * info.bits
+        if (used === 0) note = '不能为空'
+        else if (used > info.capacity) note = `最多 ${info.max} 字节（${info.capacity} 位）`
+    }
+    const el = $('capacity')
+    if (note) {
+        el.textContent = `✗ ${note}`
+        el.className = 'capacity err'
+        return false
+    }
+    const percent = Math.round((used / info.capacity) * 100)
+    el.textContent = `已用 ${used} / ${info.capacity} 位（${percent}%）`
+    el.className = 'capacity ok'
+    return true
+}
+const postJson = async (url, body) => {
+    const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+    return data
+}
+const displayScale = () => {
+    const img = $('baseImage')
+    return img.naturalWidth ? img.getBoundingClientRect().width / img.naturalWidth : 1
+}
+const toImagePoint = (clientX, clientY) => {
+    const rect = $('overlay').getBoundingClientRect()
+    const scale = displayScale()
+    return {x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale}
+}
+// 返回错误信息；合法返回 null。excludeId 用于排除自身。
+const regionError = (region, excludeId) => {
+    const shortSide = Math.min(region.width, region.height)
+    if (shortSide < MIN_SIDE) return `短边需 ≥ ${MIN_SIDE}（当前 ${region.width}×${region.height}）`
+    if (Math.max(region.width, region.height) > shortSide * 2) return `长宽比不能超过 2:1（当前 ${region.width}×${region.height}）`
+    if (region.x < 0 || region.y < 0 || region.x + region.width > state.imageWidth || region.y + region.height > state.imageHeight) return '超出图片范围'
+    for (const other of state.regions) {
+        if (other.id === excludeId) continue
+        if (region.x < other.x + other.width && other.x < region.x + region.width &&
+            region.y < other.y + other.height && other.y < region.y + region.height) return '与其它水印区域重叠'
+    }
+    return null
+}
+// 从起点到当前点构成矩形；长宽比限制在 2:1 以内（超过则压缩长边）。
+const rectFrom = (a, b) => {
+    let w = Math.abs(b.x - a.x)
+    let h = Math.abs(b.y - a.y)
+    if (w > 0 && h > 0) {
+        if (w > h * 2) w = h * 2
+        else if (h > w * 2) h = w * 2
+    }
+    const x1 = b.x < a.x ? a.x - w : a.x
+    const y1 = b.y < a.y ? a.y - h : a.y
+    const x = clamp(Math.round(x1), 0, Math.max(0, state.imageWidth - 1))
+    const y = clamp(Math.round(y1), 0, Math.max(0, state.imageHeight - 1))
+    const width = clamp(Math.round(w), 1, state.imageWidth - x)
+    const height = clamp(Math.round(h), 1, state.imageHeight - y)
+    return {x, y, width, height}
+}
+
+// ---------------- 微调（选中区域的左上/右下坐标） ----------------
+const fineInputs = ['tlx', 'tly', 'brx', 'bry'].map((id) => $(id))
+const syncFineTune = () => {
+    const region = state.regions.find((item) => item.id === state.selectedId)
+    $('fineTune').classList.toggle('on', Boolean(region))
+    if (!region) return
+    $('tlx').value = region.x
+    $('tly').value = region.y
+    $('brx').value = region.x + region.width
+    $('bry').value = region.y + region.height
+}
+const applyFineTune = () => {
+    const region = state.regions.find((item) => item.id === state.selectedId)
+    if (!region) return
+    const values = fineInputs.map((input) => Number(input.value))
+    if (!values.every(Number.isFinite)) return
+    const [x1, y1, x2, y2] = values
+    const left = clamp(Math.round(Math.min(x1, x2)), 0, state.imageWidth - 1)
+    const top = clamp(Math.round(Math.min(y1, y2)), 0, state.imageHeight - 1)
+    const right = clamp(Math.round(Math.max(x1, x2)), left + 1, state.imageWidth)
+    const bottom = clamp(Math.round(Math.max(y1, y2)), top + 1, state.imageHeight)
+    region.x = left
+    region.y = top
+    region.width = right - left
+    region.height = bottom - top
+    render()
+}
+
+// ---------------- 渲染 ----------------
+const render = () => {
+    const scale = displayScale()
+    const parts = []
+    for (const region of state.regions) {
+        const selected = region.id === state.selectedId
+        const invalid = drag && drag.region && drag.region.id === region.id && regionError(region, region.id) !== null
+        const cls = ['region', selected ? '' : 'dim', invalid ? 'invalid' : ''].join(' ')
+        const handles = selected
+            ? ['nw', 'ne', 'sw', 'se'].map((h) => `<span class="handle ${h}" data-handle="${h}"></span>`).join('')
+            : ''
+        const index = state.regions.indexOf(region) + 1
+        parts.push(`<div class="${cls}" data-region="${region.id}" style="left:${region.x * scale}px;top:${region.y * scale}px;width:${region.width * scale}px;height:${region.height * scale}px"><span class="badge">${index}</span>${handles}</div>`)
+    }
+    if (drag && drag.mode === 'draw' && drag.temp) {
+        const t = drag.temp
+        const invalid = regionError(t, null) !== null
+        parts.push(`<div class="region ${invalid ? 'invalid' : ''}" style="left:${t.x * scale}px;top:${t.y * scale}px;width:${t.width * scale}px;height:${t.height * scale}px"></div>`)
+    }
+    $('overlay').innerHTML = parts.join('')
+    renderList()
+    if (!fineInputs.includes(document.activeElement)) syncFineTune()
+}
+const renderList = () => {
+    $('regionList').innerHTML = state.regions.map((region, index) => `
+        <li class="${region.id === state.selectedId ? 'active' : ''}" data-select="${region.id}">
+            <span class="idx">${index + 1}</span>
+            <span class="info">(${region.x}, ${region.y}) · ${region.width}×${region.height}</span>
+            <button class="del" data-del="${region.id}" title="删除">✕</button>
+        </li>`).join('')
+}
+
+// ---------------- 区域操作 ----------------
+const selectRegion = (id) => {
+    state.selectedId = id
+    render()
+}
+const deleteRegion = (id) => {
+    state.regions = state.regions.filter((region) => region.id !== id)
+    if (state.selectedId === id) state.selectedId = null
+    render()
+    setStatus('已删除水印区域')
+}
+const findFreeSpot = (width, height) => {
+    const step = 20
+    for (let y = 0; y + height <= state.imageHeight; y += step) {
+        for (let x = 0; x + width <= state.imageWidth; x += step) {
+            if (regionError({x, y, width, height}, null) === null) return {x, y, width, height}
+        }
+    }
+    return null
+}
+const addRegion = () => {
+    if (!state.imageWidth) {
+        setStatus('请先加载图片', 'err')
+        return
+    }
+    const width = Math.min(DEFAULT_SIDE, state.imageWidth)
+    const height = Math.min(DEFAULT_SIDE, state.imageHeight)
+    const center = {
+        x: Math.round((state.imageWidth - width) / 2),
+        y: Math.round((state.imageHeight - height) / 2),
+        width,
+        height
+    }
+    const spot = regionError(center, null) === null ? center : findFreeSpot(width, height)
+    if (!spot) {
+        setStatus('没有足够的空闲空间放置新水印', 'err')
+        return
+    }
+    const region = {id: state.nextId++, ...spot}
+    state.regions.push(region)
+    state.selectedId = region.id
+    render()
+    setStatus(`已新增水印 #${state.regions.length}`, 'ok')
+}
+
+// ---------------- 拖拽交互 ----------------
+// 把 (w,h) 限制为：短边 ≥150、长宽比 ≤2:1。
+const constrainSize = (w, h) => {
+    w = Math.max(1, Math.round(w))
+    h = Math.max(1, Math.round(h))
+    if (Math.min(w, h) < MIN_SIDE) {
+        if (w <= h) w = MIN_SIDE
+        else h = MIN_SIDE
+    }
+    if (w > h * 2) w = h * 2
+    if (h > w * 2) h = w * 2
+    return {w, h}
+}
+const applyResize = (current, point) => {
+    const original = current.original
+    const anchor = {
+        nw: {x: original.x + original.width, y: original.y + original.height},
+        ne: {x: original.x, y: original.y + original.height},
+        sw: {x: original.x + original.width, y: original.y},
+        se: {x: original.x, y: original.y}
+    }[current.handle]
+    const {w, h} = constrainSize(Math.abs(point.x - anchor.x), Math.abs(point.y - anchor.y))
+    const x = point.x >= anchor.x ? anchor.x : anchor.x - w
+    const y = point.y >= anchor.y ? anchor.y : anchor.y - h
+    current.region.width = w
+    current.region.height = h
+    current.region.x = Math.round(clamp(x, 0, state.imageWidth - w))
+    current.region.y = Math.round(clamp(y, 0, state.imageHeight - h))
+}
+$('overlay').addEventListener('pointerdown', (event) => {
+    if (!state.imageWidth) return
+    const point = toImagePoint(event.clientX, event.clientY)
+    const handle = event.target.closest('[data-handle]')
+    const regionEl = event.target.closest('[data-region]')
+    if (handle && state.selectedId !== null) {
+        const region = state.regions.find((item) => item.id === state.selectedId)
+        if (!region) return
+        drag = {mode: 'resize', handle: handle.dataset.handle, region, original: {...region}}
+    } else if (regionEl) {
+        const id = Number(regionEl.dataset.region)
+        selectRegion(id)
+        const region = state.regions.find((item) => item.id === id)
+        drag = {mode: 'move', region, original: {...region}, start: point}
+    } else {
+        drag = {mode: 'draw', start: point, temp: null}
+    }
+    event.preventDefault()
+})
+window.addEventListener('pointermove', (event) => {
+    if (!drag) return
+    const point = toImagePoint(event.clientX, event.clientY)
+    if (drag.mode === 'draw') {
+        drag.temp = rectFrom(drag.start, point)
+    } else if (drag.mode === 'move') {
+        const dx = point.x - drag.start.x
+        const dy = point.y - drag.start.y
+        drag.region.x = Math.round(clamp(drag.original.x + dx, 0, state.imageWidth - drag.region.width))
+        drag.region.y = Math.round(clamp(drag.original.y + dy, 0, state.imageHeight - drag.region.height))
+    } else {
+        applyResize(drag, point)
+    }
+    render()
+})
+window.addEventListener('pointerup', () => {
+    if (!drag) return
+    if (drag.mode === 'draw') {
+        const temp = drag.temp
+        const error = temp ? regionError(temp, null) : '未拖动出区域'
+        if (temp && error === null) {
+            const region = {id: state.nextId++, ...temp}
+            state.regions.push(region)
+            state.selectedId = region.id
+            setStatus(`已新增水印 #${state.regions.length}`, 'ok')
+        } else {
+            setStatus(`未添加：${error}`, 'err')
+        }
+    } else {
+        const error = regionError(drag.region, drag.region.id)
+        if (error) {
+            Object.assign(drag.region, drag.original)
+            setStatus(`已还原：${error}`, 'err')
+        }
+    }
+    drag = null
+    render()
+})
+$('regionList').addEventListener('click', (event) => {
+    const del = event.target.closest('[data-del]')
+    if (del) {
+        deleteRegion(Number(del.dataset.del))
+        return
+    }
+    const item = event.target.closest('[data-select]')
+    if (item) selectRegion(Number(item.dataset.select))
+})
+window.addEventListener('keydown', (event) => {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && state.selectedId !== null && document.activeElement?.tagName !== 'INPUT') {
+        deleteRegion(state.selectedId)
+        event.preventDefault()
+    }
+})
+window.addEventListener('resize', render)
+
+// ---------------- 图片与 API ----------------
+const loadImage = () => {
+    const path = $('imagePath').value.trim()
+    if (!path) {
+        setStatus('请填写图片路径', 'err')
+        return
+    }
+    setStatus('加载中…')
+    const img = $('baseImage')
+    img.onload = () => {
+        state.imageWidth = img.naturalWidth
+        state.imageHeight = img.naturalHeight
+        state.regions = []
+        state.selectedId = null
+        $('dims').textContent = `图片尺寸：${img.naturalWidth} × ${img.naturalHeight} 像素`
+        $('resultImage').removeAttribute('src')
+        render()
+        setStatus('图片已加载：拖拽画方块，或点「+ 新增水印」', 'ok')
+    }
+    img.onerror = () => setStatus('图片加载失败（检查路径）', 'err')
+    img.src = `/api/image?path=${encodeURIComponent(path)}&t=${Date.now()}`
+}
+const doAdd = async () => {
+    if (!state.imageWidth) {
+        setStatus('请先加载图片', 'err')
+        return
+    }
+    if (state.regions.length === 0) {
+        setStatus('请先添加至少一个水印区域', 'err')
+        return
+    }
+    for (const [index, region] of state.regions.entries()) {
+        const error = regionError(region, region.id)
+        if (error) {
+            setStatus(`水印 #${index + 1} 无效：${error}`, 'err')
+            return
+        }
+    }
+    const outputPath = $('outputPath').value.trim()
+    if (!outputPath) {
+        setStatus('请填写输出路径', 'err')
+        return
+    }
+    if (!measure()) {
+        setStatus('水印内容不符合当前模式要求（见工具条「容量」）', 'err')
+        return
+    }
+    $('addBtn').disabled = true
+    setStatus('添加中…（首次运行会加载模型，稍慢）')
+    try {
+        const positions = state.regions.map((region) => [
+            {x: region.x, y: region.y},
+            {x: region.x + region.width, y: region.y + region.height}
+        ])
+        const result = await postJson('/api/add', {
+            filepath: $('imagePath').value.trim(),
+            watermarkPosition: positions,
+            watermarkContent: $('content').value,
+            mode: $('mode').value,
+            outputFile: outputPath
+        })
+        state.outputPath = result.outputFile
+        const img = $('resultImage')
+        img.onload = () => setStatus(`✓ 已添加 ${state.regions.length} 处水印，PSNR ${result.psnr} dB`, 'ok')
+        img.onerror = () => setStatus(`✓ 已添加，但结果预览加载失败`, 'err')
+        img.src = `/api/image?path=${encodeURIComponent(result.outputFile)}&t=${Date.now()}`
+    } catch (error) {
+        setStatus(`✗ ${error.message}`, 'err')
+    } finally {
+        $('addBtn').disabled = false
+    }
+}
+
+// ---------------- 绑定 ----------------
+$('loadBtn').onclick = loadImage
+$('newBtn').onclick = addRegion
+$('addBtn').onclick = doAdd
+$('content').addEventListener('input', measure)
+$('mode').addEventListener('change', measure)
+for (const input of fineInputs) {
+    input.addEventListener('input', applyFineTune)
+    input.addEventListener('change', syncFineTune)
+    input.addEventListener('wheel', (event) => {
+        event.preventDefault()
+        const current = Number(input.value)
+        if (!Number.isFinite(current)) return
+        const step = event.shiftKey ? 10 : 1
+        input.value = current + (event.deltaY < 0 ? step : -step)
+        applyFineTune()
+    }, {passive: false})
+}
+measure()
+// 路径说明弹窗
+for (const button of document.querySelectorAll('[data-help]')) {
+    button.onclick = () => $('helpModal').classList.add('on')
+}
+$('helpClose').onclick = () => $('helpModal').classList.remove('on')
+$('helpModal').onclick = (event) => {
+    if (event.target === $('helpModal')) $('helpModal').classList.remove('on')
+}
+// 不自动加载：等用户填路径后点「加载图片」
+</script>
+</body>
+</html>
